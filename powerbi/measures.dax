@@ -1,0 +1,125 @@
+// ============================================================
+// 不動産・空き家ダッシュボード ― DAXメジャー集
+// 前提: powerbi/model.md のテーブル構成。
+// S1=住宅・土地統計調査 / S2=地価公示 / S3=建築着工統計調査
+// ============================================================
+
+// ---------- S1 空き家スナップショット (2023) ----------
+空き家数 =
+SUM ( FactVacancySnapshot[vacant_total] )
+
+総住宅数 =
+SUM ( FactVacancySnapshot[total_dwellings] )
+
+空き家率 =
+DIVIDE ( [空き家数], [総住宅数] )
+
+その他空き家数 =
+SUM ( FactVacancySnapshot[vacant_other] )
+
+その他空き家率 =
+DIVIDE ( [その他空き家数], [総住宅数] )
+
+賃貸用空き家数 =
+SUM ( FactVacancySnapshot[vacant_for_rent] )
+
+売却用空き家数 =
+SUM ( FactVacancySnapshot[vacant_for_sale] )
+
+二次的住宅数 =
+SUM ( FactVacancySnapshot[vacant_second] )
+
+居住世帯あり住宅数 =
+SUM ( FactVacancySnapshot[occupied_dwellings] )
+
+空き家数_全国 =
+CALCULATE ( [空き家数], DimPrefecture[pref_code] = "00" )
+
+空き家率_全国 =
+CALCULATE ( [空き家率], DimPrefecture[pref_code] = "00" )
+
+空き家率_全国差 =
+[空き家率] - [空き家率_全国]
+
+// ---------- S1 全国推移 ----------
+空き家数_推移 =
+SUM ( FactVacancyTrendNat[vacant_total] )
+
+総世帯数_推移 =
+SUM ( FactVacancyTrendNat[households] )
+
+住宅数_世帯数ギャップ =
+SUM ( FactVacancyTrendNat[total_dwellings] ) - [総世帯数_推移]
+
+// ---------- S1 建て方別 ----------
+建て方別空き家数 =
+SUM ( FactVacancyStructure[vacant_dwellings] )
+
+一戸建空き家比率 =
+DIVIDE (
+    CALCULATE ( [建て方別空き家数], DimStructure[structure] = "一戸建" ),
+    CALCULATE ( [建て方別空き家数], DimStructure[structure] = "総数" )
+)
+
+// ---------- S2 地価公示 ----------
+住宅地変動率2025 =
+CALCULATE (
+    AVERAGE ( FactLandRatePref[rate_2025_pct] ),
+    DimLandUse[land_use] = "住宅地"
+)
+
+商業地変動率2025 =
+CALCULATE (
+    AVERAGE ( FactLandRatePref[rate_2025_pct] ),
+    DimLandUse[land_use] = "商業地"
+)
+
+住宅地平均価格2025 =
+CALCULATE (
+    AVERAGE ( FactLandSnapshot[avg_price_2025_yen_m2] ),
+    DimLandUse[land_use] = "住宅地"
+)
+
+地価平均価格_推移 =
+AVERAGE ( FactLandTrendNat[avg_price_yen_m2] )
+
+地価変動率_推移 =
+AVERAGE ( FactLandTrendNat[rate_pct] )
+
+// ---------- S3 建築着工 ----------
+着工戸数_都道府県 =
+SUM ( FactStartsPref[new_housing_starts] )
+
+着工戸数_暦年 =
+CALCULATE (
+    SUM ( FactStartsNational[total_starts] ),
+    FactStartsNational[year_type] = "暦年"
+)
+
+着工戸数_年度 =
+CALCULATE (
+    SUM ( FactStartsNational[total_starts] ),
+    FactStartsNational[year_type] = "年度",
+    FactStartsNational[status] = "確定"
+)
+
+着工戸数_前年比 =
+VAR cur =
+    CALCULATE ( [着工戸数_都道府県] )
+VAR prev =
+    CALCULATE (
+        [着工戸数_都道府県],
+        DimYear[year] = SELECTEDVALUE ( DimYear[year] ) - 1
+    )
+RETURN
+    DIVIDE ( cur, prev ) - 1
+
+分譲比率_年度 =
+DIVIDE (
+    CALCULATE (
+        SUM ( FactStartsNational[for_sale] ),
+        FactStartsNational[year_type] = "年度",
+        FactStartsNational[status] = "確定"
+    ),
+    [着工戸数_年度]
+)
